@@ -20,6 +20,7 @@ OBJS=\
 	$(OBJDIR)\symbol_manager.obj\
 	$(OBJDIR)\vtable_manager.obj\
 	$(OBJDIR)\ts.obj\
+	$(OBJDIR)\memory.obj\
 
 LIBS=\
 

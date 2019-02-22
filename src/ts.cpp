@@ -132,10 +132,6 @@ DECLARE_API(ts) {
   }
   else if (vargs[0] == "-r") {
   JsrtRuntime:
-    JsrtRuntime rt;
-    rt.load(addr);
-    std::stringstream ss;
-    rt.dump(ss);
-    dprintf("%s\n", ss.str().c_str());
+    dump_object<JsrtRuntime>(addr);
   }
 }

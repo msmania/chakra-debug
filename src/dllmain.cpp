@@ -30,5 +30,6 @@ DECLARE_API(help) {
 dprintf(
   "\n# Recycler\n"
   "!ts [-r JsrtRuntime] [-c JsrtContext] [-l Js::JavascriptLibrary]\n"
+  "!heap [-r Memory::Recycler] [-m Memory::HeapInfoManager]\n"
   );
 }

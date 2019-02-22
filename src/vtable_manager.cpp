@@ -13,32 +13,31 @@ class vtable_manager {
            : "";
   }
 
-  std::unordered_map<address_t, std::string> map_;
+  std::unordered_map<address_t, std::string> vtable_map_;
 
   void push(address_t vt) {
     static char symbol_name[1024];
     address_t displacement = 0;
     GetSymbol(vt, symbol_name, &displacement);
     if (displacement == 0) {
-      map_[vt] = strip_symbol_name(symbol_name);
+      vtable_map_[vt] = strip_symbol_name(symbol_name);
     }
   }
 
 public:
   const std::string &resolve_type(address_t addr) {
     address_t vt = load_pointer(addr);
-    if (map_[vt].length() == 0) {
+    if (vtable_map_[vt].length() == 0) {
       push(vt);
     }
-    return map_[vt];
+    return vtable_map_[vt];
   }
 
   void dump_all() const {
-    char buf[20];
-    for (const auto &pair : map_) {
-      Log("%s: %s\n",
-          pair.second.c_str(),
-          ptos(pair.first, buf, sizeof(buf)));
+    Log("vtable_map_\n");
+    for (const auto &pair : vtable_map_) {
+      address_string s(pair.first);
+      Log("%s: %s\n", pair.second.c_str(), s);
     }
   }
 };
