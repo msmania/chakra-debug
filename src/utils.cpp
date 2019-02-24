@@ -12,9 +12,8 @@
 address_t load_pointer(address_t addr) {
   address_t loaded{};
   if (!ReadPointer(addr, &loaded)) {
-    char buf[20];
-    Log("Failed to load a pointer from %s\n",
-        ptos(loaded, buf, sizeof(buf)));
+    address_string s(addr);
+    Log("Failed to load a pointer from %s\n", s);
   }
   return loaded;
 }

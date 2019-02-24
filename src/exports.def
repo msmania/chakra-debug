@@ -2,6 +2,7 @@ EXPORTS
 	WinDbgExtensionDllInit
 	ExtensionApiVersion
 	help
+	bucket
 	heap
 	ts
 	runtests

@@ -34,3 +34,15 @@ void dump_object(address_t addr) {
   t.dump(ss);
   dprintf("%s\n", ss.str().c_str());
 }
+
+template<typename T>
+T load_data(address_t addr) {
+  T data{};
+  ULONG cb = 0;
+  if (ReadMemory(addr, &data, sizeof(T), &cb) == 0
+      || cb != sizeof(T)) {
+    address_string s(addr);
+    Log("Failed to load a pointer from %s\n", s);
+  }
+  return data;
+}
