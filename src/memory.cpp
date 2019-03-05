@@ -149,8 +149,8 @@ namespace Memory {
       + " >";
 
     address_t endAddress{},
-              freeObjectList{};
-    TBlockType heapBlock;
+              freeObjectList{},
+              heapBlock{};
     address_t prev{},
               next{};
 
@@ -161,8 +161,8 @@ namespace Memory {
         addr + get_field_offset(full_type.c_str(), "endAddress"));
       freeObjectList = load_pointer(
         addr + get_field_offset(full_type.c_str(), "freeObjectList"));
-      heapBlock.load(load_pointer(
-        addr + get_field_offset(full_type.c_str(), "heapBlock")));
+      heapBlock = load_pointer(
+        addr + get_field_offset(full_type.c_str(), "heapBlock"));
       prev = load_pointer(
         addr + get_field_offset(full_type.c_str(), "prev"));
       next = load_pointer(
@@ -170,11 +170,29 @@ namespace Memory {
     }
 
     virtual void dump(std::ostream &s) const {
-      address_string s1(endAddress),
-                     s2(freeObjectList);
-      s << s2 << '-' << s1 << " Block{ ";
-      heapBlock.dump_for_allocator(s);
-      s << " }";
+      address_string s1(freeObjectList);
+      s << s1;
+      if (endAddress) {
+        // Bump allocation
+        address_string s2(endAddress);
+        s << '-' << s2 << " Block{ ";
+        if (heapBlock) {
+          TBlockType heapBlock_loaded;
+          heapBlock_loaded.load(heapBlock);
+          heapBlock_loaded.dump_for_allocator(s);
+        }
+        s << " }";
+      }
+      else if (freeObjectList) {
+        // Free list allocation
+        for (address_t free_chunk = freeObjectList; ; ) {
+          free_chunk = load_pointer(free_chunk) & ~1;
+          if (!free_chunk) break;
+          address_string s2(free_chunk);
+          s << "->" << s2;
+        }
+      }
+      s << std::endl;
     }
 
     address_t GetNext() const { return next; }
@@ -232,6 +250,10 @@ namespace Memory {
         p = allocator.GetNext();
         if (p == allocatorHead) break;
       }
+      s << "emptyBlockList:" << std::endl;
+      // TODO: GetUnusedHeapBlock
+      s << "nextAllocableBlockHead:" << std::endl;
+      // TODO: TryAlloc
     }
   };
 
@@ -273,20 +295,54 @@ namespace Memory {
     }
   };
 
-  class HeapInfo : public debug_object {
-    address_t recycler{},
-              newNormalHeapBlockList{};
-    std::vector<HeapBucketGroup<SmallAllocationBlockAttributes>> heapBuckets;
-    //std::vector<HeapBucketGroup<MediumAllocationBlockAttributes>> mediumHeapBuckets;
-    //LargeHeapBucket largeObjectBucket;
+  class LargeHeapBucket : public debug_object {
 
   public:
     virtual void load(address_t addr) {
       base_ = addr;
-      newNormalHeapBlockList = load_pointer(
-        addr + get_field_offset("Memory::HeapInfo", "newNormalHeapBlockList"));
+    }
+
+    virtual void dump(std::ostream &s) const {
+      address_string s1(base_);
+      s << s1 << std::endl;
+    }
+  };
+
+  class PageAllocatorBaseCommon
+  {};
+/*
+  template<typename TVirtualAlloc, typename TSegment, typename TPageSegment>
+  class PageAllocatorBase: public PageAllocatorBaseCommon {
+    DListBase<TPageSegment> segments;
+  };
+
+  class PageAllocator: public PageAllocatorBase
+  {};
+
+  class IdleDecommitPageAllocator : public PageAllocator
+  {};
+
+  class RecyclerPageAllocator : public IdleDecommitPageAllocator
+  {};
+*/
+  class HeapInfo : public debug_object {
+    address_t recycler{},
+              newNormalHeapBlockList{},
+              newMediumNormalHeapBlockList{};
+    std::vector<HeapBucketGroup<SmallAllocationBlockAttributes>> heapBuckets;
+    std::vector<HeapBucketGroup<MediumAllocationBlockAttributes>> mediumHeapBuckets;
+    LargeHeapBucket largeObjectBucket;
+    //RecyclerPageAllocator recyclerPageAllocator;
+
+  public:
+    virtual void load(address_t addr) {
+      base_ = addr;
       recycler = load_pointer(
         addr + get_field_offset("Memory::HeapInfo", "recycler"));
+      newNormalHeapBlockList = load_pointer(
+        addr + get_field_offset("Memory::HeapInfo", "newNormalHeapBlockList"));
+      newMediumNormalHeapBlockList = load_pointer(
+        addr + get_field_offset("Memory::HeapInfo", "newMediumNormalHeapBlockList"));
 
       auto field_array = get_field_info("Memory::HeapInfo", "heapBuckets"),
            field_item = get_field_info("Memory::HeapInfo", "heapBuckets[0]");
@@ -297,7 +353,7 @@ namespace Memory {
         heapBuckets[i].load(addr);
         addr += field_item.size;
       }
-#if 0
+
       field_array = get_field_info("Memory::HeapInfo", "mediumHeapBuckets");
       field_item = get_field_info("Memory::HeapInfo", "mediumHeapBuckets[0]");
       num_items = field_array.size / field_item.size;
@@ -310,7 +366,6 @@ namespace Memory {
 
       largeObjectBucket.load(
         addr + get_field_offset("Memory::HeapInfo", "largeObjectBucket"));
-#endif
     }
 
     virtual void dump(std::ostream &s) const {
@@ -318,12 +373,21 @@ namespace Memory {
       s << s1 << std::endl;
 
       s << "newNormalHeapBlockList:" << std::endl;
-      SmallNormalHeapBlock block;
+      SmallNormalHeapBlock sblock;
       int cnt = 0;
-      for (address_t p = newNormalHeapBlockList; p; p = block.GetNextBlock()) {
+      for (address_t p = newNormalHeapBlockList; p; p = sblock.GetNextBlock()) {
         s << std::setfill(' ') << std::setw(4) << cnt++ << ' ';
-        block.load(p);
-        block.dump(s);
+        sblock.load(p);
+        sblock.dump(s);
+      }
+
+      s << "newMediumNormalHeapBlockList:" << std::endl;
+      MediumNormalHeapBlock mblock;
+      cnt = 0;
+      for (address_t p = newMediumNormalHeapBlockList; p; p = mblock.GetNextBlock()) {
+        s << std::setfill(' ') << std::setw(4) << cnt++ << ' ';
+        mblock.load(p);
+        mblock.dump(s);
       }
 
       s << "heapBuckets:" << std::endl;
@@ -331,13 +395,12 @@ namespace Memory {
         s << std::setfill(' ') << std::setw(4) << i << ' ';
         heapBuckets[i].dump(s);
       }
-#if 0
+
       s << "mediumHeapBuckets:" << std::endl;
       for (size_t i = 0; i < mediumHeapBuckets.size(); ++i) {
         s << std::setfill(' ') << std::setw(4) << i << ' ';
         mediumHeapBuckets[i].dump(s);
       }
-#endif
     }
 
     address_t GetRecycler() const {
